@@ -33,6 +33,14 @@ contract('UnlimitedAllowanceToken', (accounts: string[]) => {
     });
 
     describe('transfer', () => {
+        it('should throw if owner has insufficient balance', async () => {
+            const ownerBalance = await zeroEx.token.getBalanceAsync(tokenAddress, owner);
+            const amountToTransfer = ownerBalance.plus(1);
+            return expect(token.transfer.call(spender, amountToTransfer, { from: owner })).to.be.rejectedWith(
+                constants.REVERT,
+            );
+        });
+
         it('should transfer balance from sender to receiver', async () => {
             const receiver = spender;
             const initOwnerBalance = await zeroEx.token.getBalanceAsync(tokenAddress, owner);
@@ -56,15 +64,18 @@ contract('UnlimitedAllowanceToken', (accounts: string[]) => {
     });
 
     describe('transferFrom', () => {
-        it('should return false if owner has insufficient balance', async () => {
+        it('should throw if owner has insufficient balance', async () => {
             const ownerBalance = await zeroEx.token.getBalanceAsync(tokenAddress, owner);
             const amountToTransfer = ownerBalance.plus(1);
             await zeroEx.token.setAllowanceAsync(tokenAddress, owner, spender, amountToTransfer);
-            const didReturnTrue = await token.transferFrom.call(owner, spender, amountToTransfer, { from: spender });
-            expect(didReturnTrue).to.be.false();
+            return expect(
+                token.transferFrom.call(owner, spender, amountToTransfer, {
+                    from: spender,
+                }),
+            ).to.be.rejectedWith(constants.REVERT);
         });
 
-        it('should return false if spender has insufficient allowance', async () => {
+        it('should throw if spender has insufficient allowance', async () => {
             const ownerBalance = await zeroEx.token.getBalanceAsync(tokenAddress, owner);
             const amountToTransfer = ownerBalance;
 
@@ -72,8 +83,11 @@ contract('UnlimitedAllowanceToken', (accounts: string[]) => {
             const spenderAllowanceIsInsufficient = spenderAllowance.cmp(amountToTransfer) < 0;
             expect(spenderAllowanceIsInsufficient).to.be.true();
 
-            const didReturnTrue = await token.transferFrom.call(owner, spender, amountToTransfer, { from: spender });
-            expect(didReturnTrue).to.be.false();
+            return expect(
+                token.transferFrom.call(owner, spender, amountToTransfer, {
+                    from: spender,
+                }),
+            ).to.be.rejectedWith(constants.REVERT);
         });
 
         it('should return true on a 0 value transfer', async () => {

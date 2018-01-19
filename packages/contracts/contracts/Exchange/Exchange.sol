@@ -18,9 +18,9 @@
 
 pragma solidity ^0.4.11;
 
-import "./TokenTransferProxy.sol";
-import "./tokens/Token.sol";
-import "./utils/SafeMath.sol";
+import "../TokenTransferProxy/TokenTransferProxy.sol";
+import "../../contracts_old/Token/v1.sol";
+import "../../contracts_old/SafeMath/v1.sol";
 
 /// @title Exchange - Facilitates exchange of ERC20 tokens.
 /// @author Amir Bandeali - <amir@0xProject.com>, Will Warren - <will@0xProject.com>
@@ -600,4 +600,3 @@ contract Exchange is SafeMath {
         return Token(token).allowance.gas(EXTERNAL_QUERY_GAS_LIMIT)(owner, TOKEN_TRANSFER_PROXY_CONTRACT); // Limit gas to prevent reentrancy
     }
 }
-
