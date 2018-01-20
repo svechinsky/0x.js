@@ -21,6 +21,7 @@ pragma solidity ^0.4.11;
 import "./TokenTransferProxy.sol";
 import "./tokens/Token.sol";
 import "./utils/SafeMath.sol";
+import "./MakerProxy.sol";
 
 /// @title Exchange - Facilitates exchange of ERC20 tokens.
 /// @author Amir Bandeali - <amir@0xProject.com>, Will Warren - <will@0xProject.com>
@@ -77,6 +78,7 @@ contract Exchange is SafeMath {
         address makerToken;
         address takerToken;
         address feeRecipient;
+        address signer;
         uint makerTokenAmount;
         uint takerTokenAmount;
         uint makerFee;
@@ -95,7 +97,7 @@ contract Exchange is SafeMath {
     */
 
     /// @dev Fills the input order.
-    /// @param orderAddresses Array of order's maker, taker, makerToken, takerToken, and feeRecipient.
+    /// @param orderAddresses Array of order's maker, taker, makerToken, takerToken, feeRecipient and signer.
     /// @param orderValues Array of order's makerTokenAmount, takerTokenAmount, makerFee, takerFee, expirationTimestampInSec, and salt.
     /// @param fillTakerTokenAmount Desired amount of takerToken to fill.
     /// @param shouldThrowOnInsufficientBalanceOrAllowance Test if transfer will fail before attempting.
@@ -104,7 +106,7 @@ contract Exchange is SafeMath {
     /// @param s ECDSA signature parameters s.
     /// @return Total amount of takerToken filled in trade.
     function fillOrder(
-          address[5] orderAddresses,
+          address[6] orderAddresses,
           uint[6] orderValues,
           uint fillTakerTokenAmount,
           bool shouldThrowOnInsufficientBalanceOrAllowance,
@@ -120,6 +122,7 @@ contract Exchange is SafeMath {
             makerToken: orderAddresses[2],
             takerToken: orderAddresses[3],
             feeRecipient: orderAddresses[4],
+            signer: orderAddresses[5],
             makerTokenAmount: orderValues[0],
             takerTokenAmount: orderValues[1],
             makerFee: orderValues[2],
@@ -131,7 +134,7 @@ contract Exchange is SafeMath {
         require(order.taker == address(0) || order.taker == msg.sender);
         require(order.makerTokenAmount > 0 && order.takerTokenAmount > 0 && fillTakerTokenAmount > 0);
         require(isValidSignature(
-            order.maker,
+            order.signer,
             order.orderHash,
             v,
             r,
@@ -160,9 +163,15 @@ contract Exchange is SafeMath {
             return 0;
         }
 
+
+
         uint filledMakerTokenAmount = getPartialAmount(filledTakerTokenAmount, order.takerTokenAmount, order.makerTokenAmount);
         uint paidMakerFee;
         uint paidTakerFee;
+
+        require(
+            order.maker == order.signer || MakerProxy(order.maker).verifyOrder(orderAddresses, orderValues));
+
         filled[order.orderHash] = safeAdd(filled[order.orderHash], filledTakerTokenAmount);
         require(transferViaTokenTransferProxy(
             order.makerToken,
@@ -219,7 +228,7 @@ contract Exchange is SafeMath {
     /// @param cancelTakerTokenAmount Desired amount of takerToken to cancel in order.
     /// @return Amount of takerToken cancelled.
     function cancelOrder(
-        address[5] orderAddresses,
+        address[6] orderAddresses,
         uint[6] orderValues,
         uint cancelTakerTokenAmount)
         public
@@ -231,6 +240,7 @@ contract Exchange is SafeMath {
             makerToken: orderAddresses[2],
             takerToken: orderAddresses[3],
             feeRecipient: orderAddresses[4],
+            signer: orderAddresses[5],
             makerTokenAmount: orderValues[0],
             takerTokenAmount: orderValues[1],
             makerFee: orderValues[2],
@@ -281,7 +291,7 @@ contract Exchange is SafeMath {
     /// @param r ECDSA signature parameters r.
     /// @param s ECDSA signature parameters s.
     function fillOrKillOrder(
-        address[5] orderAddresses,
+        address[6] orderAddresses,
         uint[6] orderValues,
         uint fillTakerTokenAmount,
         uint8 v,
@@ -309,7 +319,7 @@ contract Exchange is SafeMath {
     /// @param r Array of ECDSA signature r parameters.
     /// @param s Array of ECDSA signature s parameters.
     function batchFillOrders(
-        address[5][] orderAddresses,
+        address[6][] orderAddresses,
         uint[6][] orderValues,
         uint[] fillTakerTokenAmounts,
         bool shouldThrowOnInsufficientBalanceOrAllowance,
@@ -339,7 +349,7 @@ contract Exchange is SafeMath {
     /// @param r Array of ECDSA signature r parameters.
     /// @param s Array of ECDSA signature s parameters.
     function batchFillOrKillOrders(
-        address[5][] orderAddresses,
+        address[6][] orderAddresses,
         uint[6][] orderValues,
         uint[] fillTakerTokenAmounts,
         uint8[] v,
@@ -369,7 +379,7 @@ contract Exchange is SafeMath {
     /// @param s Array of ECDSA signature s parameters.
     /// @return Total amount of fillTakerTokenAmount filled in orders.
     function fillOrdersUpTo(
-        address[5][] orderAddresses,
+        address[6][] orderAddresses,
         uint[6][] orderValues,
         uint fillTakerTokenAmount,
         bool shouldThrowOnInsufficientBalanceOrAllowance,
@@ -401,7 +411,7 @@ contract Exchange is SafeMath {
     /// @param orderValues Array of uint arrays containing individual order values.
     /// @param cancelTakerTokenAmounts Array of desired amounts of takerToken to cancel in orders.
     function batchCancelOrders(
-        address[5][] orderAddresses,
+        address[6][] orderAddresses,
         uint[6][] orderValues,
         uint[] cancelTakerTokenAmounts)
         public
@@ -423,7 +433,7 @@ contract Exchange is SafeMath {
     /// @param orderAddresses Array of order's maker, taker, makerToken, takerToken, and feeRecipient.
     /// @param orderValues Array of order's makerTokenAmount, takerTokenAmount, makerFee, takerFee, expirationTimestampInSec, and salt.
     /// @return Keccak-256 hash of order.
-    function getOrderHash(address[5] orderAddresses, uint[6] orderValues)
+    function getOrderHash(address[6] orderAddresses, uint[6] orderValues)
         public
         constant
         returns (bytes32)
@@ -435,6 +445,7 @@ contract Exchange is SafeMath {
             orderAddresses[2], // makerToken
             orderAddresses[3], // takerToken
             orderAddresses[4], // feeRecipient
+            orderAddresses[5], // signer
             orderValues[0],    // makerTokenAmount
             orderValues[1],    // takerTokenAmount
             orderValues[2],    // makerFee
